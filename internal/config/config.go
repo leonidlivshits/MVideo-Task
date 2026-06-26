@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -21,7 +22,7 @@ type DatabaseConfig struct {
 }
 
 func Load() (Config, error) {
-	return Config{
+	cfg := Config{
 		HTTPAddr: getEnv("HTTP_ADDR", ":8080"),
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -31,7 +32,13 @@ func Load() (Config, error) {
 			Password: os.Getenv("DB_PASSWORD"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
-	}, nil
+	}
+
+	if cfg.Database.Password == "" {
+		return Config{}, fmt.Errorf("DB_PASSWORD is required")
+	}
+
+	return cfg, nil
 }
 
 func (c DatabaseConfig) ConnString() string {
