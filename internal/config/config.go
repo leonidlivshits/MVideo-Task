@@ -1,10 +1,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -22,6 +25,10 @@ type DatabaseConfig struct {
 }
 
 func Load() (Config, error) {
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Config{}, fmt.Errorf("load .env: %w", err)
+	}
+
 	cfg := Config{
 		HTTPAddr: getEnv("HTTP_ADDR", ":8080"),
 		Database: DatabaseConfig{
@@ -42,13 +49,21 @@ func Load() (Config, error) {
 }
 
 func (c DatabaseConfig) ConnString() string {
+	return c.connString("postgres")
+}
+
+func (c DatabaseConfig) MigrationConnString() string {
+	return c.connString("pgx5")
+}
+
+func (c DatabaseConfig) connString(scheme string) string {
 	host := c.Host
 	if c.Port != "" {
 		host = net.JoinHostPort(c.Host, c.Port)
 	}
 
 	connectionURL := url.URL{
-		Scheme: "postgres",
+		Scheme: scheme,
 		User:   url.UserPassword(c.User, c.Password),
 		Host:   host,
 		Path:   c.Name,
