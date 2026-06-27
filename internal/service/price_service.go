@@ -20,6 +20,11 @@ type PriceRepository interface {
 	GetHistory(ctx context.Context, filter HistoryFilter) ([]domain.PricePoint, error)
 }
 
+type PricesAtResult struct {
+	At    time.Time
+	Items []domain.PriceAt
+}
+
 type PriceService struct {
 	repository PriceRepository
 }
@@ -45,20 +50,28 @@ func (s *PriceService) SetPrices(ctx context.Context, prices []domain.PricePoint
 	return s.repository.InsertPrices(ctx, prices)
 }
 
-func (s *PriceService) GetPricesAt(ctx context.Context, goodIDs []domain.GoodID, at time.Time) ([]domain.PriceAt, error) {
+func (s *PriceService) GetPricesAt(ctx context.Context, goodIDs []domain.GoodID, at time.Time) (PricesAtResult, error) {
 	if len(goodIDs) == 0 {
-		return nil, ErrEmptyGoodIDs
+		return PricesAtResult{}, ErrEmptyGoodIDs
 	}
 
 	if err := validateGoodIDs(goodIDs); err != nil {
-		return nil, err
+		return PricesAtResult{}, err
 	}
 
 	if at.IsZero() {
 		at = time.Now()
 	}
 
-	return s.repository.GetPricesAt(ctx, goodIDs, at)
+	prices, err := s.repository.GetPricesAt(ctx, goodIDs, at)
+	if err != nil {
+		return PricesAtResult{}, err
+	}
+
+	return PricesAtResult{
+		At:    at,
+		Items: prices,
+	}, nil
 }
 
 func (s *PriceService) GetHistory(ctx context.Context, filter HistoryFilter) ([]domain.PricePoint, error) {

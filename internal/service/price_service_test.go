@@ -162,14 +162,20 @@ func TestGetPricesAtUsesCurrentTimeWhenAtIsZero(t *testing.T) {
 	repository := &fakePriceRepository{}
 	service := NewPriceService(repository)
 
-	_, err := service.GetPricesAt(context.Background(), []domain.GoodID{1}, time.Time{})
+	result, err := service.GetPricesAt(context.Background(), []domain.GoodID{1}, time.Time{})
 
 	if err != nil {
 		t.Errorf("get prices at: %v", err)
 		return
 	}
+	if result.At.IsZero() {
+		t.Errorf("expected non-zero result time")
+	}
 	if repository.pricesAtTime.IsZero() {
 		t.Errorf("expected non-zero time")
+	}
+	if !result.At.Equal(repository.pricesAtTime) {
+		t.Errorf("expected result time %v, got %v", repository.pricesAtTime, result.At)
 	}
 }
 
@@ -179,7 +185,7 @@ func TestGetPricesAtCallsRepository(t *testing.T) {
 	service := NewPriceService(repository)
 	at := time.Date(2026, 6, 27, 10, 0, 0, 0, time.UTC)
 
-	_, err := service.GetPricesAt(context.Background(), []domain.GoodID{1, 2}, at)
+	result, err := service.GetPricesAt(context.Background(), []domain.GoodID{1, 2}, at)
 
 	if err != nil {
 		t.Errorf("get prices at: %v", err)
@@ -194,6 +200,9 @@ func TestGetPricesAtCallsRepository(t *testing.T) {
 	}
 	if !repository.pricesAtTime.Equal(at) {
 		t.Errorf("expected at %v, got %v", at, repository.pricesAtTime)
+	}
+	if !result.At.Equal(at) {
+		t.Errorf("expected result at %v, got %v", at, result.At)
 	}
 }
 
