@@ -19,6 +19,12 @@ const (
 	errorMessageAtRequired = "at is required"
 	errorMessageAtMustProvidedOnce = "at must be provided once"
 	errorMessageInvalidAt = "invalid at, use RFC3339 format"
+	errorMessageFromRequired = "from is required"
+	errorMessageFromMustProvidedOnce = "from must be provided once"
+	errorMessageInvalidFrom = "invalid from, use RFC3339 format"
+	errorMessageToRequired = "to is required"
+	errorMessageToMustProvidedOnce = "to must be provided once"
+	errorMessageInvalidTo = "invalid to, use RFC3339 format"
 	errorMessageInternalServerError = "internal server error"
 )
 

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +13,13 @@ import (
 
 	"mvideo-task/internal/domain"
 	"mvideo-task/internal/service"
+)
+
+const (
+	csvContentType = "text/csv"
+	csvContentDisposition = `attachment; filename="price_history.csv"`
+	decimalBase = 10
+	int64BitSize = 64
 )
 
 type Handler struct {
@@ -92,7 +101,56 @@ func (h *Handler) GetPricesAt(w nethttp.ResponseWriter, r *nethttp.Request) {
 }
 
 func (h *Handler) GetHistoryCSV(w nethttp.ResponseWriter, r *nethttp.Request) {
-	writeError(w, nethttp.StatusNotImplemented, "not implemented")
+	query := r.URL.Query()
+
+	goodIDs, err := parseGoodIDs(query["good_id"])
+	if err != nil {
+		writeError(w, nethttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	from, err := parseRequiredTime(
+		query["from"],
+		errorMessageFromRequired,
+		errorMessageFromMustProvidedOnce,
+		errorMessageInvalidFrom,
+	)
+	if err != nil {
+		writeError(w, nethttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	to, err := parseRequiredTime(
+		query["to"],
+		errorMessageToRequired,
+		errorMessageToMustProvidedOnce,
+		errorMessageInvalidTo,
+	)
+	if err != nil {
+		writeError(w, nethttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	history, err := h.service.GetHistory(r.Context(), service.HistoryFilter{
+		GoodIDs: goodIDs,
+		From:    from,
+		To:      to,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	body, err := priceHistoryCSV(history)
+	if err != nil {
+		writeError(w, nethttp.StatusInternalServerError, errorMessageInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", csvContentType)
+	w.Header().Set("Content-Disposition", csvContentDisposition)
+	w.WriteHeader(nethttp.StatusOK)
+	_, _ = w.Write(body)
 }
 
 func parseGoodIDs(values []string) ([]domain.GoodID, error) {
@@ -119,7 +177,7 @@ func parseGoodID(value string) (domain.GoodID, error) {
 		return 0, errors.New(errorMessageGoodIDRequired)
 	}
 
-	goodID, err := strconv.ParseInt(value, 10, 64)
+	goodID, err := strconv.ParseInt(value, decimalBase, int64BitSize)
 	if err != nil {
 		return 0, fmt.Errorf(errorMessageInvalidGoodID, value)
 	}
@@ -149,6 +207,28 @@ func parseAt(values []string) (time.Time, error) {
 	return at, nil
 }
 
+func parseRequiredTime(values []string, requiredMessage string, duplicateMessage string, invalidMessage string) (time.Time, error) {
+	if len(values) == 0 {
+		return time.Time{}, errors.New(requiredMessage)
+	}
+
+	if len(values) > 1 {
+		return time.Time{}, errors.New(duplicateMessage)
+	}
+
+	value := strings.TrimSpace(values[0])
+	if value == "" {
+		return time.Time{}, errors.New(requiredMessage)
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}, errors.New(invalidMessage)
+	}
+
+	return t, nil
+}
+
 func priceAtResponse(price domain.PriceAt) PriceResponse {
 	var responsePrice *int
 	if price.Price != nil {
@@ -167,4 +247,32 @@ func priceAtResponse(price domain.PriceAt) PriceResponse {
 		Price:    responsePrice,
 		CreateAt: createAt,
 	}
+}
+
+func priceHistoryCSV(history []domain.PricePoint) ([]byte, error) {
+	var buffer bytes.Buffer
+	writer := csv.NewWriter(&buffer)
+
+	if err := writer.Write([]string{"good_id", "create_at", "price"}); err != nil {
+		return nil, err
+	}
+
+	for _, item := range history {
+		row := []string{
+			strconv.FormatInt(int64(item.GoodID), decimalBase),
+			item.CreateAt.Format(time.RFC3339Nano),
+			strconv.Itoa(int(item.Price)),
+		}
+
+		if err := writer.Write(row); err != nil {
+			return nil, err
+		}
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
