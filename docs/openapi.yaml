@@ -1,0 +1,264 @@
+openapi: 3.0.3
+
+info:
+  title: Price Service API
+  version: 1.0.0
+  description: API сервиса управления ценами товаров.
+
+servers:
+  - url: http://localhost:8080
+    description: Локальный запуск сервиса
+
+tags:
+  - name: Prices
+    description: Работа с ценами товаров
+
+paths:
+  /api/v1/prices:
+    post:
+      tags:
+        - Prices
+      summary: Установить цены товаров
+      description: Создает новые записи в истории цен.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPricesRequest"
+            example:
+              items:
+                - good_id: 1
+                  price: 100
+                - good_id: 2
+                  price: 200
+      responses:
+        "201":
+          description: Цены установлены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetPricesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    get:
+      tags:
+        - Prices
+      summary: Получить цены товаров на момент времени
+      description: Если `at` не передан, используется текущее время сервиса.
+      parameters:
+        - name: good_id
+          in: query
+          required: true
+          description: Идентификаторы товаров. Можно передавать как `good_id=1,2` или как `good_id=1&good_id=2`.
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+          style: form
+          explode: false
+          example:
+            - 1
+            - 2
+        - name: at
+          in: query
+          required: false
+          description: Момент времени в RFC3339.
+          schema:
+            type: string
+            format: date-time
+          example: "2026-06-27T10:00:00Z"
+      responses:
+        "200":
+          description: Цены на указанный момент времени
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricesAtResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/prices/history.csv:
+    get:
+      tags:
+        - Prices
+      summary: Скачать историю цен в CSV
+      description: >
+        Период задается как `[from, to)`: `from` включительно, `to` не включительно.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Начало периода в RFC3339.
+          schema:
+            type: string
+            format: date-time
+          example: "2026-01-01T00:00:00Z"
+        - name: to
+          in: query
+          required: true
+          description: Конец периода в RFC3339.
+          schema:
+            type: string
+            format: date-time
+          example: "2027-01-01T00:00:00Z"
+        - name: good_id
+          in: query
+          required: false
+          description: Идентификаторы товаров. Если не передать, выгружается история по всем товарам.
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+          style: form
+          explode: false
+          example:
+            - 1
+            - 2
+      responses:
+        "200":
+          description: CSV с историей цен
+          headers:
+            Content-Disposition:
+              description: Имя файла для скачивания
+              schema:
+                type: string
+                example: attachment; filename="price_history.csv"
+          content:
+            text/csv:
+              schema:
+                type: string
+              example: |
+                good_id,create_at,price
+                1,2026-06-27T10:00:00Z,100
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  schemas:
+    SetPricesRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SetPriceItem"
+
+    SetPriceItem:
+      type: object
+      required:
+        - good_id
+        - price
+      properties:
+        good_id:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        price:
+          type: integer
+          minimum: 1
+          example: 100
+
+    SetPricesResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SetPriceResponse"
+
+    SetPriceResponse:
+      type: object
+      required:
+        - good_id
+        - price
+        - create_at
+      properties:
+        good_id:
+          type: integer
+          format: int64
+          example: 1
+        price:
+          type: integer
+          example: 100
+        create_at:
+          type: string
+          format: date-time
+          example: "2026-06-27T10:00:00Z"
+
+    PricesAtResponse:
+      type: object
+      required:
+        - at
+        - items
+      properties:
+        at:
+          type: string
+          format: date-time
+          example: "2026-06-27T10:00:00Z"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceResponse"
+
+    PriceResponse:
+      type: object
+      required:
+        - good_id
+        - price
+        - create_at
+      properties:
+        good_id:
+          type: integer
+          format: int64
+          example: 1
+        price:
+          type: integer
+          nullable: true
+          example: 100
+        create_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-06-27T10:00:00Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: price must be positive
+
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
