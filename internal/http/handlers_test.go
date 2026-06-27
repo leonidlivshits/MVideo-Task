@@ -295,6 +295,34 @@ func TestGetHistoryCSVHandlerReturnsErrorForMissingFrom(t *testing.T) {
 	}
 }
 
+func TestRouterHandlesCORSPreflight(t *testing.T) {
+	router := newTestRouter(&fakePriceRepository{})
+
+	request := httptest.NewRequest(nethttp.MethodOptions, "/api/v1/prices", nil)
+	request.Header.Set("Origin", "http://localhost:8081")
+	request.Header.Set("Access-Control-Request-Method", "POST")
+	request.Header.Set("Access-Control-Request-Headers", "content-type")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusNoContent {
+		t.Errorf("expected status %d, got %d", nethttp.StatusNoContent, response.Code)
+	}
+	if response.Header().Get("Access-Control-Allow-Origin") != "http://localhost:8081" {
+		t.Errorf("unexpected Access-Control-Allow-Origin: %q", response.Header().Get("Access-Control-Allow-Origin"))
+	}
+	if response.Header().Get("Access-Control-Allow-Methods") == "" {
+		t.Errorf("expected Access-Control-Allow-Methods header")
+	}
+	if response.Header().Get("Access-Control-Allow-Headers") != "content-type" {
+		t.Errorf("unexpected Access-Control-Allow-Headers: %q", response.Header().Get("Access-Control-Allow-Headers"))
+	}
+	if response.Header().Get("Access-Control-Max-Age") == "" {
+		t.Errorf("expected Access-Control-Max-Age header")
+	}
+}
+
 func newTestRouter(repository service.PriceRepository) nethttp.Handler {
 	priceService := service.NewPriceService(repository)
 	handler := NewHandler(priceService)
