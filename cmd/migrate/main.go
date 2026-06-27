@@ -51,10 +51,10 @@ func run() error {
 		}
 		slog.Info("migrations are up to date")
 	case "down":
-		if err := migrator.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		if err := migrator.Steps(-1); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			return fmt.Errorf("down migrations: %w", err)
 		}
-		slog.Info("migrations rolled back")
+		slog.Info("last migration rolled back")
 	}
 
 	return nil
