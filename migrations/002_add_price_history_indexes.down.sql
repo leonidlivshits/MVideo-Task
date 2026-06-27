@@ -1,0 +1,2 @@
+drop index price_history_create_at_good_id_id_idx;
+drop index price_history_good_id_create_at_id_idx;
